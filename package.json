@@ -1,0 +1,10 @@
+{
+  "name": "tab-crushr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/generate-icons.mjs",
+    "test": "node --test"
+  }
+}

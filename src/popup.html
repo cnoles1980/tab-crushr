@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tab Crushr</title>
+    <link rel="stylesheet" href="./popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brandBlock">
+          <img class="brandIcon" src="../icons/icon-48.png" alt="">
+          <div>
+            <h1>Tab Crushr</h1>
+            <p id="trackingStatus" class="status">Loading...</p>
+          </div>
+        </div>
+        <button id="refreshButton" class="iconButton refreshIcon" title="Refresh scan" aria-label="Refresh scan">&#8635;</button>
+      </header>
+
+      <section class="settings" aria-label="Settings">
+        <label class="toggle">
+          <input id="includeIncognito" type="checkbox">
+          <span>Incognito</span>
+        </label>
+        <label class="toggle">
+          <input id="discardInsteadOfClose" type="checkbox">
+          <span>Discard mode</span>
+        </label>
+        <label class="toggle">
+          <input id="protectPinnedAudibleActive" type="checkbox">
+          <span>Protect active media</span>
+        </label>
+      </section>
+
+      <section id="notice" class="notice" hidden></section>
+
+      <section class="summary" aria-label="Summary">
+        <div>
+          <strong id="candidateCount">0</strong>
+          <span>matches</span>
+        </div>
+        <div>
+          <strong id="tabCount">0</strong>
+          <span>tabs scanned</span>
+        </div>
+        <div>
+          <strong id="selectedPercent">0%</strong>
+          <span>selected to crush</span>
+        </div>
+        <div>
+          <strong id="ramSavings">0 MB</strong>
+          <span>est. RAM saved</span>
+        </div>
+      </section>
+
+      <section id="impactText" class="impact" hidden></section>
+
+      <section class="lifetime" aria-label="Lifetime crush stats">
+        <div>
+          <span>Lifetime tabs crushed</span>
+          <strong id="lifetimeTabs">0</strong>
+        </div>
+        <div>
+          <span>Lifetime RAM saved</span>
+          <strong id="lifetimeRam">0 MB</strong>
+        </div>
+      </section>
+
+      <details class="achievements" open>
+        <summary>Next milestones</summary>
+        <div id="achievementList" class="achievementList"></div>
+      </details>
+
+      <details class="earnedAchievements">
+        <summary>Earned achievements</summary>
+        <div id="earnedAchievementList" class="earnedAchievementList"></div>
+      </details>
+
+      <section id="candidateList" class="candidateList" aria-live="polite"></section>
+
+      <footer class="actions">
+        <button id="keepButton" class="secondary" type="button">Keep</button>
+        <button id="saveButton" class="secondary" type="button">Save for Later</button>
+        <button id="crushButton" class="primary" type="button">Crush Tabs</button>
+      </footer>
+
+      <details class="saved" open>
+        <summary>Saved for later</summary>
+        <div id="savedLaterList" class="savedLaterList"></div>
+      </details>
+
+      <details class="audit">
+        <summary>Crush history</summary>
+        <div id="auditLog" class="auditLog"></div>
+      </details>
+    </main>
+
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>
