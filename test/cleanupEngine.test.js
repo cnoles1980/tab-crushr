@@ -136,6 +136,53 @@ test("recognizes related tabs for any same site", () => {
   assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "dndbeyond.com"));
 });
 
+test("includes active tabs in related same-site review groups", () => {
+  const character = tab(30, "https://www.dndbeyond.com/characters/123456", { active: true });
+  const campaign = tab(31, "https://www.dndbeyond.com/campaigns/98765");
+  const sourcebook = tab(32, "https://dndbeyond.com/sources/basic-rules");
+  const result = buildCleanupCandidates({
+    tabs: [character, campaign, sourcebook],
+    records: {
+      [key(character)]: record(character),
+      [key(campaign)]: record(campaign),
+      [key(sourcebook)]: record(sourcebook)
+    },
+    settings: {
+      trackingStartedAt: now,
+      protectPinnedAudibleActive: true
+    },
+    now
+  });
+
+  assert.equal(result.candidates.length, 3);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [character.id, campaign.id, sourcebook.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.equal(result.candidates.find((candidate) => candidate.tabId === character.id)?.active, true);
+});
+
+test("keeps allowlisted domains out of related same-site groups", () => {
+  const first = tab(33, "https://docs.example.com/a");
+  const second = tab(34, "https://docs.example.com/b");
+  const result = buildCleanupCandidates({
+    tabs: [first, second],
+    records: {
+      [key(first)]: record(first),
+      [key(second)]: record(second)
+    },
+    settings: {
+      trackingStartedAt: now,
+      allowlistDomains: ["example.com"],
+      protectPinnedAudibleActive: true
+    },
+    now
+  });
+
+  assert.equal(result.candidates.length, 0);
+});
+
 test("keeps exact duplicate matches ahead of broader related matches", () => {
   const older = tab(25, "https://www.youtube.com/watch?v=aaa&utm_source=email");
   const newer = tab(26, "https://www.youtube.com/watch?v=aaa", { lastAccessed: now });

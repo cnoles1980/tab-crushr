@@ -157,7 +157,18 @@ function renderCandidateRow(candidate) {
 
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = `${candidate.domain} | age ${formatDuration(candidate.ageMs)} | last nav ${formatDate(candidate.lastNavigationAt)}${candidate.incognito ? " | incognito" : ""}`;
+  const stateNotes = [
+    candidate.active ? "ACTIVE" : "",
+    candidate.pinned ? "pinned" : "",
+    candidate.audible ? "audible" : "",
+    candidate.incognito ? "incognito" : ""
+  ].filter(Boolean);
+  meta.textContent = [
+    ...stateNotes,
+    candidate.domain,
+    `age ${formatDuration(candidate.ageMs)}`,
+    `last nav ${formatDate(candidate.lastNavigationAt)}`
+  ].join(" | ");
 
   const url = document.createElement("div");
   url.className = "url";
@@ -188,10 +199,11 @@ function renderCandidateGroup(parent, reason, candidates) {
 
   const siteGroups = groupBy(candidates, (candidate) => candidate.groupLabel || candidate.domain);
   for (const [site, siteCandidates] of siteGroups.entries()) {
-    const siteGroup = document.createElement("div");
+    const siteGroup = document.createElement("details");
     siteGroup.className = "siteGroup";
+    siteGroup.open = true;
 
-    const siteTitle = document.createElement("h3");
+    const siteTitle = document.createElement("summary");
     siteTitle.className = "siteTitle";
     siteTitle.textContent = `${site} (${siteCandidates.length})`;
     siteGroup.append(siteTitle);

@@ -292,10 +292,15 @@ h1 {
 }
 
 .siteTitle {
+  cursor: pointer;
   margin: 2px 0 0;
   color: #465c88;
   font-size: 12px;
   font-weight: 750;
+}
+
+.siteTitle::marker {
+  color: #ff7a30;
 }
 
 .candidate {

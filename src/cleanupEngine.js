@@ -390,6 +390,9 @@ function makeCandidate(reason, tab, record, normalizedUrl, details, now, extra =
     domain: getDomain(tab.url),
     normalizedUrl,
     incognito: Boolean(tab.incognito),
+    active: Boolean(tab.active),
+    pinned: Boolean(tab.pinned),
+    audible: Boolean(tab.audible),
     ageMs: Math.max(0, now - Number(record.firstSeenAt || record.createdAt || now)),
     lastNavigationAt,
     details,
@@ -467,6 +470,7 @@ export function buildCleanupCandidates(input) {
       continue;
     }
 
+    const relatedSettings = { ...settings, protectPinnedAudibleActive: false };
     const distinctUrls = new Set(group.items.map((item) => item.normalizedUrl));
     if (distinctUrls.size < 2) {
       continue;
@@ -475,7 +479,7 @@ export function buildCleanupCandidates(input) {
     for (const item of group.items) {
       if (
         candidatesByTab.has(item.tab.id) ||
-        isProtectedTab(item.tab, settings)
+        isProtectedTab(item.tab, relatedSettings)
       ) {
         continue;
       }
