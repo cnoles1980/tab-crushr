@@ -285,6 +285,19 @@ h1 {
   text-transform: uppercase;
 }
 
+.siteGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.siteTitle {
+  margin: 2px 0 0;
+  color: #465c88;
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .candidate {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto;

@@ -118,6 +118,92 @@ function renderNotice(scanState) {
   elements.notice.textContent = notices.join(" ");
 }
 
+function groupBy(items, keyFn) {
+  if (Map.groupBy) {
+    return Map.groupBy(items, keyFn);
+  }
+
+  return items.reduce((map, item) => {
+    const key = keyFn(item);
+    const group = map.get(key) || [];
+    group.push(item);
+    map.set(key, group);
+    return map;
+  }, new Map());
+}
+
+function renderCandidateRow(candidate) {
+  const row = document.createElement("article");
+  row.className = "candidate";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = state.selectedCandidateIds.has(candidate.id);
+  checkbox.setAttribute("aria-label", `Select ${candidate.title}`);
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) {
+      state.selectedCandidateIds.add(candidate.id);
+    } else {
+      state.selectedCandidateIds.delete(candidate.id);
+    }
+    syncActionButtons();
+  });
+
+  const main = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.className = "candidateTitle";
+  heading.title = candidate.title;
+  heading.textContent = candidate.title;
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = `${candidate.domain} | age ${formatDuration(candidate.ageMs)} | last nav ${formatDate(candidate.lastNavigationAt)}${candidate.incognito ? " | incognito" : ""}`;
+
+  const url = document.createElement("div");
+  url.className = "url";
+  url.textContent = candidate.url;
+
+  main.append(heading, meta, url);
+
+  const keepDomain = document.createElement("button");
+  keepDomain.className = "domainButton";
+  keepDomain.type = "button";
+  keepDomain.textContent = "Always keep domain";
+  keepDomain.addEventListener("click", async () => {
+    await sendMessage({ type: "ADD_ALLOWLIST_DOMAIN", domain: candidate.domain });
+    await refresh();
+  });
+
+  row.append(checkbox, main, keepDomain);
+  return row;
+}
+
+function renderCandidateGroup(parent, reason, candidates) {
+  if (reason !== "related") {
+    for (const candidate of candidates) {
+      parent.append(renderCandidateRow(candidate));
+    }
+    return;
+  }
+
+  const siteGroups = groupBy(candidates, (candidate) => candidate.groupLabel || candidate.domain);
+  for (const [site, siteCandidates] of siteGroups.entries()) {
+    const siteGroup = document.createElement("div");
+    siteGroup.className = "siteGroup";
+
+    const siteTitle = document.createElement("h3");
+    siteTitle.className = "siteTitle";
+    siteTitle.textContent = `${site} (${siteCandidates.length})`;
+    siteGroup.append(siteTitle);
+
+    for (const candidate of siteCandidates) {
+      siteGroup.append(renderCandidateRow(candidate));
+    }
+
+    parent.append(siteGroup);
+  }
+}
+
 function renderCandidates() {
   const visible = state.candidates.filter((candidate) => !state.hiddenCandidateIds.has(candidate.id));
   elements.candidateCount.textContent = String(visible.length);
@@ -132,14 +218,7 @@ function renderCandidates() {
     return;
   }
 
-  const groups = Map.groupBy
-    ? Map.groupBy(visible, (candidate) => candidate.reason)
-    : visible.reduce((map, candidate) => {
-      const group = map.get(candidate.reason) || [];
-      group.push(candidate);
-      map.set(candidate.reason, group);
-      return map;
-    }, new Map());
+  const groups = groupBy(visible, (candidate) => candidate.reason);
 
   for (const [reason, candidates] of groups.entries()) {
     const group = document.createElement("section");
@@ -150,52 +229,7 @@ function renderCandidates() {
     title.textContent = `${reasonLabel(reason)} (${candidates.length})`;
     group.append(title);
 
-    for (const candidate of candidates) {
-      const row = document.createElement("article");
-      row.className = "candidate";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = state.selectedCandidateIds.has(candidate.id);
-      checkbox.setAttribute("aria-label", `Select ${candidate.title}`);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) {
-          state.selectedCandidateIds.add(candidate.id);
-        } else {
-          state.selectedCandidateIds.delete(candidate.id);
-        }
-        syncActionButtons();
-      });
-
-      const main = document.createElement("div");
-      const heading = document.createElement("h3");
-      heading.className = "candidateTitle";
-      heading.title = candidate.title;
-      heading.textContent = candidate.title;
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = `${candidate.domain} | age ${formatDuration(candidate.ageMs)} | last nav ${formatDate(candidate.lastNavigationAt)}${candidate.incognito ? " | incognito" : ""}`;
-
-      const url = document.createElement("div");
-      url.className = "url";
-      url.textContent = candidate.url;
-
-      main.append(heading, meta, url);
-
-      const keepDomain = document.createElement("button");
-      keepDomain.className = "domainButton";
-      keepDomain.type = "button";
-      keepDomain.textContent = "Always keep domain";
-      keepDomain.addEventListener("click", async () => {
-        await sendMessage({ type: "ADD_ALLOWLIST_DOMAIN", domain: candidate.domain });
-        await refresh();
-      });
-
-      row.append(checkbox, main, keepDomain);
-      group.append(row);
-    }
-
+    renderCandidateGroup(group, reason, candidates);
     elements.candidateList.append(group);
   }
 

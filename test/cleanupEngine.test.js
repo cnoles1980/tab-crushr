@@ -81,9 +81,12 @@ test("recognizes related Google Calendar tabs across different dates and views",
   });
 
   assert.equal(relatedAppGroup(week.url)?.label, "Google Calendar");
-  assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].reason, "related");
-  assert.equal(result.candidates[0].tabId, week.id);
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [week.id, month.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
 });
 
 test("recognizes related YouTube tabs even when the video URLs are different", () => {
@@ -99,9 +102,13 @@ test("recognizes related YouTube tabs even when the video URLs are different", (
     now
   });
 
-  assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].reason, "related");
-  assert.equal(result.candidates[0].tabId, firstVideo.id);
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [firstVideo.id, secondVideo.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "YouTube"));
 });
 
 test("recognizes related tabs for any same site", () => {
@@ -120,12 +127,13 @@ test("recognizes related tabs for any same site", () => {
   });
 
   assert.equal(relatedAppGroup(character.url)?.label, "dndbeyond.com");
-  assert.equal(result.candidates.length, 2);
+  assert.equal(result.candidates.length, 3);
   assert.deepEqual(
     result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
-    [character.id, campaign.id]
+    [character.id, campaign.id, sourcebook.id]
   );
   assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "dndbeyond.com"));
 });
 
 test("keeps exact duplicate matches ahead of broader related matches", () => {

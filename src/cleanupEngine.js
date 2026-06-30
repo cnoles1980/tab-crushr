@@ -378,7 +378,7 @@ function chooseDuplicateKeeper(items) {
   })[0];
 }
 
-function makeCandidate(reason, tab, record, normalizedUrl, details, now) {
+function makeCandidate(reason, tab, record, normalizedUrl, details, now, extra = {}) {
   const lastNavigationAt = Number(record.lastNavigationAt || record.lastReloadAt || record.firstSeenAt || 0);
   return {
     id: `${reason}:${tab.id}:${normalizedUrl}`,
@@ -392,7 +392,8 @@ function makeCandidate(reason, tab, record, normalizedUrl, details, now) {
     incognito: Boolean(tab.incognito),
     ageMs: Math.max(0, now - Number(record.firstSeenAt || record.createdAt || now)),
     lastNavigationAt,
-    details
+    details,
+    ...extra
   };
 }
 
@@ -466,10 +467,13 @@ export function buildCleanupCandidates(input) {
       continue;
     }
 
-    const keeper = chooseDuplicateKeeper(group.items);
+    const distinctUrls = new Set(group.items.map((item) => item.normalizedUrl));
+    if (distinctUrls.size < 2) {
+      continue;
+    }
+
     for (const item of group.items) {
       if (
-        item.tab.id === keeper.tab.id ||
         candidatesByTab.has(item.tab.id) ||
         isProtectedTab(item.tab, settings)
       ) {
@@ -481,8 +485,9 @@ export function buildCleanupCandidates(input) {
         item.tab,
         item.record,
         item.normalizedUrl,
-        `Another ${group.related.label} tab is open in tab ${keeper.tab.id}`,
-        now
+        `Multiple ${group.related.label} tabs are open (${group.items.length} total)`,
+        now,
+        { groupLabel: group.related.label }
       ));
     }
   }
@@ -537,6 +542,7 @@ export function buildCleanupCandidates(input) {
     trackingAgeMs: settings.trackingStartedAt ? Math.max(0, now - settings.trackingStartedAt) : 0,
     candidates: [...candidatesByTab.values()].sort((a, b) => (
       a.reason.localeCompare(b.reason) ||
+      String(a.groupLabel || a.domain).localeCompare(String(b.groupLabel || b.domain)) ||
       a.domain.localeCompare(b.domain) ||
       a.title.localeCompare(b.title)
     ))
