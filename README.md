@@ -14,13 +14,13 @@ Privacy policy: https://cnoles1980.github.io/tab-crushr/privacy.html
 ## What it can clean
 
 - **Duplicates:** available immediately for open tabs in the current Chrome profile.
-- **Related app tabs:** available immediately for selected high-signal sites, including Google Calendar, Gmail, Google Drive, Google Docs/Sheets/Slides/Forms/Drawings, Google Maps, Google Search, and YouTube. These catch similar tabs that are not exact URL duplicates.
+- **Related tabs:** available immediately when multiple tabs are open from the same site, even when the URLs are different. These catch similar tabs that are not exact URL duplicates.
 - **Stale tabs:** available after 72 hours of tracking data.
 - **Superseded tabs:** available after 72 hours of tracking data, when an older tab is later opened and closed in a newer tab.
 
 The extension intentionally does not infer tab history from before it was installed.
 
-Related app tabs are surfaced for review separately from exact duplicates. They are intentionally broader matches, so review them before crushing.
+Related tabs are surfaced for review separately from exact duplicates. They are intentionally broader matches, so review them before crushing.
 
 ## Profiles and Incognito
 

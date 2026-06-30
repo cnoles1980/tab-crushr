@@ -104,7 +104,31 @@ test("recognizes related YouTube tabs even when the video URLs are different", (
   assert.equal(result.candidates[0].tabId, firstVideo.id);
 });
 
-test("keeps exact duplicate matches ahead of broader related app matches", () => {
+test("recognizes related tabs for any same site", () => {
+  const character = tab(27, "https://www.dndbeyond.com/characters/123456");
+  const campaign = tab(28, "https://www.dndbeyond.com/campaigns/98765");
+  const sourcebook = tab(29, "https://dndbeyond.com/sources/basic-rules", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [character, campaign, sourcebook],
+    records: {
+      [key(character)]: record(character),
+      [key(campaign)]: record(campaign),
+      [key(sourcebook)]: record(sourcebook)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(character.url)?.label, "dndbeyond.com");
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [character.id, campaign.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+});
+
+test("keeps exact duplicate matches ahead of broader related matches", () => {
   const older = tab(25, "https://www.youtube.com/watch?v=aaa&utm_source=email");
   const newer = tab(26, "https://www.youtube.com/watch?v=aaa", { lastAccessed: now });
   const result = buildCleanupCandidates({

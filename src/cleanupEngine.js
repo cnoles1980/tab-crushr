@@ -72,13 +72,13 @@ const RELATED_APP_RULES = [
   {
     label: "Google Maps",
     match(parsed) {
-      return parsed.hostname === "www.google.com" && parsed.pathname.startsWith("/maps");
+      return parsed.hostname === "google.com" && parsed.pathname.startsWith("/maps");
     }
   },
   {
     label: "Google Search",
     match(parsed) {
-      return parsed.hostname === "www.google.com" && parsed.pathname === "/search";
+      return parsed.hostname === "google.com" && parsed.pathname === "/search";
     }
   },
   {
@@ -141,22 +141,30 @@ export function normalizeUrl(url) {
   return `${parsed.protocol}//${parsed.hostname}${port}${pathname}${query ? `?${query}` : ""}`;
 }
 
+function relatedHostname(hostname) {
+  return hostname.toLowerCase().replace(/^(www|m)\./, "");
+}
+
 export function relatedAppGroup(url) {
   if (!isCleanableUrl(url)) {
     return null;
   }
 
   const parsed = new URL(url);
-  parsed.hostname = parsed.hostname.toLowerCase();
+  parsed.hostname = relatedHostname(parsed.hostname);
   const rule = RELATED_APP_RULES.find((item) => item.match(parsed));
 
-  if (!rule) {
-    return null;
+  if (rule) {
+    return {
+      key: `related:${rule.label.toLowerCase().replace(/\s+/g, "-")}`,
+      label: rule.label
+    };
   }
 
+  const label = parsed.hostname;
   return {
-    key: `related:${rule.label.toLowerCase().replace(/\s+/g, "-")}`,
-    label: rule.label
+    key: `related:site:${label}`,
+    label
   };
 }
 

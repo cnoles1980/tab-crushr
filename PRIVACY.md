@@ -1,8 +1,8 @@
 # Privacy Policy for Tab Crushr
 
-Effective date: June 25, 2026
+Effective date: June 30, 2026
 
-Tab Crushr is a Chrome extension that helps users review, save, close, and discard duplicate, stale, and superseded browser tabs.
+Tab Crushr is a Chrome extension that helps users review, save, close, and discard duplicate, related, stale, and superseded browser tabs.
 
 ## Data Collected
 
@@ -24,6 +24,7 @@ Tab Crushr stores the following data locally in the user's browser:
 This data is used only to provide Tab Crushr's core features:
 
 - Detecting duplicate tabs
+- Detecting related tabs from the same site
 - Detecting stale tabs after 72 hours of local tracking
 - Detecting superseded tabs
 - Saving selected URLs for later
