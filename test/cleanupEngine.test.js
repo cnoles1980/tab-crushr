@@ -5,7 +5,8 @@ import {
   buildAchievementDefinitions,
   buildCleanupCandidates,
   evaluateAchievements,
-  normalizeUrl
+  normalizeUrl,
+  relatedAppGroup
 } from "../src/cleanupEngine.js";
 
 const now = Date.UTC(2026, 5, 24, 12, 0, 0);
@@ -51,6 +52,61 @@ test("normalizes tracking params, fragments, and query order", () => {
 test("detects duplicate tabs immediately and keeps the most recently accessed tab", () => {
   const older = tab(1, "https://example.com/docs?a=1&utm_medium=email", { lastAccessed: now - 10_000 });
   const newer = tab(2, "https://example.com/docs?a=1", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [older, newer],
+    records: {
+      [key(older)]: record(older),
+      [key(newer)]: record(newer)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].reason, "duplicate");
+  assert.equal(result.candidates[0].tabId, older.id);
+});
+
+test("recognizes related Google Calendar tabs across different dates and views", () => {
+  const week = tab(21, "https://calendar.google.com/calendar/u/0/r/week/2026/6/24");
+  const month = tab(22, "https://calendar.google.com/calendar/u/0/r/month/2026/7/1", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [week, month],
+    records: {
+      [key(week)]: record(week),
+      [key(month)]: record(month)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(week.url)?.label, "Google Calendar");
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].reason, "related");
+  assert.equal(result.candidates[0].tabId, week.id);
+});
+
+test("recognizes related YouTube tabs even when the video URLs are different", () => {
+  const firstVideo = tab(23, "https://www.youtube.com/watch?v=aaa");
+  const secondVideo = tab(24, "https://youtu.be/bbb", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [firstVideo, secondVideo],
+    records: {
+      [key(firstVideo)]: record(firstVideo),
+      [key(secondVideo)]: record(secondVideo)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].reason, "related");
+  assert.equal(result.candidates[0].tabId, firstVideo.id);
+});
+
+test("keeps exact duplicate matches ahead of broader related app matches", () => {
+  const older = tab(25, "https://www.youtube.com/watch?v=aaa&utm_source=email");
+  const newer = tab(26, "https://www.youtube.com/watch?v=aaa", { lastAccessed: now });
   const result = buildCleanupCandidates({
     tabs: [older, newer],
     records: {

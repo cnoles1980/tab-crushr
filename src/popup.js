@@ -60,6 +60,7 @@ function formatDate(ms) {
 function reasonLabel(reason) {
   return {
     duplicate: "Duplicates",
+    related: "Related tabs",
     stale: "Stale tabs",
     superseded: "Superseded tabs"
   }[reason] || reason;
@@ -383,7 +384,11 @@ function applyState(scanState) {
 
   state.lastScanState = scanState;
   state.candidates = scanState.candidates || [];
-  state.selectedCandidateIds = new Set(state.candidates.map((candidate) => candidate.id));
+  state.selectedCandidateIds = new Set(
+    state.candidates
+      .filter((candidate) => candidate.reason !== "related")
+      .map((candidate) => candidate.id)
+  );
   elements.includeIncognito.checked = Boolean(scanState.settings.includeIncognito);
   elements.includeIncognito.disabled = !scanState.incognitoAllowed;
   elements.discardInsteadOfClose.checked = Boolean(scanState.settings.discardInsteadOfClose);

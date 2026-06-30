@@ -38,6 +38,62 @@ const TRACKING_PARAMS = new Set([
   "msclkid"
 ]);
 
+const RELATED_APP_RULES = [
+  {
+    label: "Google Calendar",
+    match(parsed) {
+      return parsed.hostname === "calendar.google.com" && parsed.pathname.startsWith("/calendar");
+    }
+  },
+  {
+    label: "Gmail",
+    match(parsed) {
+      return parsed.hostname === "mail.google.com";
+    }
+  },
+  {
+    label: "Google Drive",
+    match(parsed) {
+      return parsed.hostname === "drive.google.com";
+    }
+  },
+  {
+    label: "Google Docs",
+    match(parsed) {
+      return parsed.hostname === "docs.google.com" && [
+        "/document",
+        "/spreadsheets",
+        "/presentation",
+        "/forms",
+        "/drawings"
+      ].some((prefix) => parsed.pathname.startsWith(prefix));
+    }
+  },
+  {
+    label: "Google Maps",
+    match(parsed) {
+      return parsed.hostname === "www.google.com" && parsed.pathname.startsWith("/maps");
+    }
+  },
+  {
+    label: "Google Search",
+    match(parsed) {
+      return parsed.hostname === "www.google.com" && parsed.pathname === "/search";
+    }
+  },
+  {
+    label: "YouTube",
+    match(parsed) {
+      return (
+        parsed.hostname === "youtube.com" ||
+        parsed.hostname === "www.youtube.com" ||
+        parsed.hostname === "m.youtube.com" ||
+        parsed.hostname === "youtu.be"
+      );
+    }
+  }
+];
+
 export function isCleanableUrl(url) {
   try {
     const parsed = new URL(url);
@@ -83,6 +139,25 @@ export function normalizeUrl(url) {
   const port = parsed.port ? `:${parsed.port}` : "";
   const query = parsed.searchParams.toString();
   return `${parsed.protocol}//${parsed.hostname}${port}${pathname}${query ? `?${query}` : ""}`;
+}
+
+export function relatedAppGroup(url) {
+  if (!isCleanableUrl(url)) {
+    return null;
+  }
+
+  const parsed = new URL(url);
+  parsed.hostname = parsed.hostname.toLowerCase();
+  const rule = RELATED_APP_RULES.find((item) => item.match(parsed));
+
+  if (!rule) {
+    return null;
+  }
+
+  return {
+    key: `related:${rule.label.toLowerCase().replace(/\s+/g, "-")}`,
+    label: rule.label
+  };
 }
 
 export function getDomain(url) {
@@ -361,6 +436,44 @@ export function buildCleanupCandidates(input) {
         item.record,
         normalizedUrl,
         `Duplicate of tab ${keeper.tab.id}`,
+        now
+      ));
+    }
+  }
+
+  const relatedGroups = new Map();
+  for (const item of normalizedItems) {
+    const related = relatedAppGroup(item.tab.url);
+    if (!related) {
+      continue;
+    }
+
+    const group = relatedGroups.get(related.key) || { related, items: [] };
+    group.items.push(item);
+    relatedGroups.set(related.key, group);
+  }
+
+  for (const group of relatedGroups.values()) {
+    if (group.items.length < 2) {
+      continue;
+    }
+
+    const keeper = chooseDuplicateKeeper(group.items);
+    for (const item of group.items) {
+      if (
+        item.tab.id === keeper.tab.id ||
+        candidatesByTab.has(item.tab.id) ||
+        isProtectedTab(item.tab, settings)
+      ) {
+        continue;
+      }
+
+      candidatesByTab.set(item.tab.id, makeCandidate(
+        "related",
+        item.tab,
+        item.record,
+        item.normalizedUrl,
+        `Another ${group.related.label} tab is open in tab ${keeper.tab.id}`,
         now
       ));
     }
