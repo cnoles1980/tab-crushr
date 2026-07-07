@@ -136,6 +136,45 @@ test("recognizes related tabs for any same site", () => {
   assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "dndbeyond.com"));
 });
 
+test("groups generic subdomains under the same related site", () => {
+  const app = tab(35, "https://app.example.com/work");
+  const help = tab(36, "https://help.example.com/article");
+  const result = buildCleanupCandidates({
+    tabs: [app, help],
+    records: {
+      [key(app)]: record(app),
+      [key(help)]: record(help)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(app.url)?.label, "example.com");
+  assert.equal(result.candidates.length, 2);
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "example.com"));
+});
+
+test("returns compact all-tab review rows for every cleanable tab", () => {
+  const first = tab(37, "https://example.com/a");
+  const second = tab(38, "chrome://extensions");
+  const third = tab(39, "https://news.example.com/story");
+  const result = buildCleanupCandidates({
+    tabs: [first, second, third],
+    records: {
+      [key(first)]: record(first),
+      [key(third)]: record(third)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.deepEqual(
+    result.allTabs.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [first.id, third.id]
+  );
+  assert.ok(result.allTabs.every((candidate) => candidate.reason === "all"));
+});
+
 test("includes active tabs in related same-site review groups", () => {
   const character = tab(30, "https://www.dndbeyond.com/characters/123456", { active: true });
   const campaign = tab(31, "https://www.dndbeyond.com/campaigns/98765");

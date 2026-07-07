@@ -145,6 +145,16 @@ function relatedHostname(hostname) {
   return hostname.toLowerCase().replace(/^(www|m)\./, "");
 }
 
+function relatedSiteHostname(hostname) {
+  const normalized = relatedHostname(hostname);
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length <= 2) {
+    return normalized;
+  }
+
+  return parts.slice(-2).join(".");
+}
+
 export function relatedAppGroup(url) {
   if (!isCleanableUrl(url)) {
     return null;
@@ -161,7 +171,7 @@ export function relatedAppGroup(url) {
     };
   }
 
-  const label = parsed.hostname;
+  const label = relatedSiteHostname(parsed.hostname);
   return {
     key: `related:site:${label}`,
     label
@@ -400,6 +410,23 @@ function makeCandidate(reason, tab, record, normalizedUrl, details, now, extra =
   };
 }
 
+function getTabSortLabel(tab) {
+  return String(tab.title || tab.url || "").toLowerCase();
+}
+
+function makeReviewTab(tab, record, normalizedUrl, now) {
+  const group = relatedAppGroup(tab.url);
+  return makeCandidate(
+    "all",
+    tab,
+    record,
+    normalizedUrl,
+    "Open tab",
+    now,
+    { groupLabel: group?.label || getDomain(tab.url) }
+  );
+}
+
 export function buildCleanupCandidates(input) {
   const now = Number(input.now || Date.now());
   const settings = mergeSettings(input.settings);
@@ -544,6 +571,12 @@ export function buildCleanupCandidates(input) {
   return {
     trackingReady,
     trackingAgeMs: settings.trackingStartedAt ? Math.max(0, now - settings.trackingStartedAt) : 0,
+    allTabs: normalizedItems
+      .map((item) => makeReviewTab(item.tab, item.record, item.normalizedUrl, now))
+      .sort((a, b) => (
+        String(a.groupLabel || a.domain).localeCompare(String(b.groupLabel || b.domain)) ||
+        getTabSortLabel(a).localeCompare(getTabSortLabel(b))
+      )),
     candidates: [...candidatesByTab.values()].sort((a, b) => (
       a.reason.localeCompare(b.reason) ||
       String(a.groupLabel || a.domain).localeCompare(String(b.groupLabel || b.domain)) ||

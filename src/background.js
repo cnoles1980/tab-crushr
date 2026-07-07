@@ -205,9 +205,13 @@ function tabDescription(candidate) {
   return candidate.domain || "Saved tab";
 }
 
+function selectableItems(state) {
+  return [...(state.candidates || []), ...(state.allTabs || [])];
+}
+
 async function saveForLater(candidateIds) {
   const state = await buildState();
-  const selected = state.candidates.filter((candidate) => candidateIds.includes(candidate.id));
+  const selected = selectableItems(state).filter((candidate) => candidateIds.includes(candidate.id));
   const normal = await getNormalState();
   const existingKeys = new Set(normal.savedLater.map((item) => item.normalizedUrl || item.url));
   const additions = [];
@@ -315,7 +319,7 @@ async function buildState() {
 
 async function applyCleanup(candidateIds, action) {
   const state = await buildState();
-  const selected = state.candidates.filter((candidate) => candidateIds.includes(candidate.id));
+  const selected = selectableItems(state).filter((candidate) => candidateIds.includes(candidate.id));
   const successful = [];
 
   if (action === "discard") {

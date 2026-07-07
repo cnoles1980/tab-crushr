@@ -17,6 +17,7 @@ Privacy policy: https://cnoles1980.github.io/tab-crushr/privacy.html
 - **Related tabs:** available immediately when multiple tabs are open from the same site, even when the URLs are different. These catch similar tabs that are not exact URL duplicates.
 - **Stale tabs:** available after 72 hours of tracking data.
 - **Superseded tabs:** available after 72 hours of tracking data, when an older tab is later opened and closed in a newer tab.
+- **All tabs:** available as a compact review view for every open web tab the extension can already see.
 
 The extension intentionally does not infer tab history from before it was installed.
 

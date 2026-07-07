@@ -1,8 +1,10 @@
 const state = {
   candidates: [],
+  allTabs: [],
   hiddenCandidateIds: new Set(),
   selectedCandidateIds: new Set(),
-  lastScanState: null
+  lastScanState: null,
+  activeView: "duplicates"
 };
 
 const elements = {
@@ -22,6 +24,7 @@ const elements = {
   achievementList: document.querySelector("#achievementList"),
   earnedAchievementList: document.querySelector("#earnedAchievementList"),
   candidateList: document.querySelector("#candidateList"),
+  viewButtons: [...document.querySelectorAll(".viewTab")],
   keepButton: document.querySelector("#keepButton"),
   saveButton: document.querySelector("#saveButton"),
   crushButton: document.querySelector("#crushButton"),
@@ -59,6 +62,7 @@ function formatDate(ms) {
 
 function reasonLabel(reason) {
   return {
+    all: "All tabs",
     duplicate: "Duplicates",
     related: "Related tabs",
     stale: "Stale tabs",
@@ -66,8 +70,26 @@ function reasonLabel(reason) {
   }[reason] || reason;
 }
 
+function isDuplicateViewCandidate(candidate) {
+  return candidate.reason === "duplicate" || candidate.reason === "related";
+}
+
+function isOldViewCandidate(candidate) {
+  return candidate.reason === "stale" || candidate.reason === "superseded";
+}
+
+function viewRows(view = state.activeView) {
+  const rows = view === "all"
+    ? state.allTabs
+    : state.candidates.filter((candidate) => (
+      view === "old" ? isOldViewCandidate(candidate) : isDuplicateViewCandidate(candidate)
+    ));
+
+  return rows.filter((candidate) => !state.hiddenCandidateIds.has(candidate.id));
+}
+
 function selectedVisibleCandidates() {
-  return state.candidates.filter((candidate) => (
+  return viewRows().filter((candidate) => (
     state.selectedCandidateIds.has(candidate.id) &&
     !state.hiddenCandidateIds.has(candidate.id)
   ));
@@ -100,6 +122,27 @@ function syncActionButtons() {
   elements.crushButton.disabled = !hasSelection;
   elements.selectedPercent.textContent = `${percent}%`;
   elements.ramSavings.textContent = formatRam(estimateSelectedRamMb());
+}
+
+function syncViewTabs() {
+  const counts = {
+    duplicates: viewRows("duplicates").length,
+    old: viewRows("old").length,
+    all: viewRows("all").length
+  };
+  const labels = {
+    duplicates: "Duplicate Tabs",
+    old: "Old Tabs",
+    all: "All Tabs"
+  };
+
+  for (const button of elements.viewButtons) {
+    const view = button.dataset.view;
+    const isActive = view === state.activeView;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+    button.textContent = `${labels[view]} (${counts[view]})`;
+  }
 }
 
 function renderNotice(scanState) {
@@ -173,8 +216,13 @@ function renderCandidateRow(candidate) {
   const url = document.createElement("div");
   url.className = "url";
   url.textContent = candidate.url;
+  const urlDetails = document.createElement("details");
+  urlDetails.className = "urlDetails";
+  const urlSummary = document.createElement("summary");
+  urlSummary.textContent = "Show URL";
+  urlDetails.append(urlSummary, url);
 
-  main.append(heading, meta, url);
+  main.append(heading, meta, urlDetails);
 
   const keepDomain = document.createElement("button");
   keepDomain.className = "domainButton";
@@ -190,7 +238,7 @@ function renderCandidateRow(candidate) {
 }
 
 function renderCandidateGroup(parent, reason, candidates) {
-  if (reason !== "related") {
+  if (reason !== "related" && reason !== "all") {
     for (const candidate of candidates) {
       parent.append(renderCandidateRow(candidate));
     }
@@ -217,14 +265,17 @@ function renderCandidateGroup(parent, reason, candidates) {
 }
 
 function renderCandidates() {
-  const visible = state.candidates.filter((candidate) => !state.hiddenCandidateIds.has(candidate.id));
+  const visible = viewRows();
   elements.candidateCount.textContent = String(visible.length);
   elements.candidateList.textContent = "";
+  syncViewTabs();
 
   if (!visible.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = "No cleanup candidates right now.";
+    empty.textContent = state.activeView === "all"
+      ? "No open web tabs found."
+      : "No cleanup candidates right now.";
     elements.candidateList.append(empty);
     syncActionButtons();
     return;
@@ -430,6 +481,7 @@ function applyState(scanState) {
 
   state.lastScanState = scanState;
   state.candidates = scanState.candidates || [];
+  state.allTabs = scanState.allTabs || [];
   state.selectedCandidateIds = new Set(
     state.candidates
       .filter((candidate) => candidate.reason !== "related")
@@ -494,6 +546,12 @@ async function saveForLater() {
 }
 
 elements.refreshButton.addEventListener("click", refresh);
+for (const button of elements.viewButtons) {
+  button.addEventListener("click", () => {
+    state.activeView = button.dataset.view || "duplicates";
+    renderCandidates();
+  });
+}
 elements.includeIncognito.addEventListener("change", () => updateSetting("includeIncognito", elements.includeIncognito.checked));
 elements.discardInsteadOfClose.addEventListener("change", () => updateSetting("discardInsteadOfClose", elements.discardInsteadOfClose.checked));
 elements.protectPinnedAudibleActive.addEventListener("change", () => updateSetting("protectPinnedAudibleActive", elements.protectPinnedAudibleActive.checked));
