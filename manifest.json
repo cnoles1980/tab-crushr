@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tab Crushr",
-  "description": "Review, save, and crush duplicate, stale, and superseded Chrome tabs.",
-  "version": "0.1.0",
+  "description": "Review, save, and crush duplicate, related, stale, and superseded Chrome tabs.",
+  "version": "0.1.2",
   "minimum_chrome_version": "116",
   "incognito": "spanning",
   "permissions": [

@@ -38,6 +38,62 @@ const TRACKING_PARAMS = new Set([
   "msclkid"
 ]);
 
+const RELATED_APP_RULES = [
+  {
+    label: "Google Calendar",
+    match(parsed) {
+      return parsed.hostname === "calendar.google.com" && parsed.pathname.startsWith("/calendar");
+    }
+  },
+  {
+    label: "Gmail",
+    match(parsed) {
+      return parsed.hostname === "mail.google.com";
+    }
+  },
+  {
+    label: "Google Drive",
+    match(parsed) {
+      return parsed.hostname === "drive.google.com";
+    }
+  },
+  {
+    label: "Google Docs",
+    match(parsed) {
+      return parsed.hostname === "docs.google.com" && [
+        "/document",
+        "/spreadsheets",
+        "/presentation",
+        "/forms",
+        "/drawings"
+      ].some((prefix) => parsed.pathname.startsWith(prefix));
+    }
+  },
+  {
+    label: "Google Maps",
+    match(parsed) {
+      return parsed.hostname === "google.com" && parsed.pathname.startsWith("/maps");
+    }
+  },
+  {
+    label: "Google Search",
+    match(parsed) {
+      return parsed.hostname === "google.com" && parsed.pathname === "/search";
+    }
+  },
+  {
+    label: "YouTube",
+    match(parsed) {
+      return (
+        parsed.hostname === "youtube.com" ||
+        parsed.hostname === "www.youtube.com" ||
+        parsed.hostname === "m.youtube.com" ||
+        parsed.hostname === "youtu.be"
+      );
+    }
+  }
+];
+
 export function isCleanableUrl(url) {
   try {
     const parsed = new URL(url);
@@ -83,6 +139,43 @@ export function normalizeUrl(url) {
   const port = parsed.port ? `:${parsed.port}` : "";
   const query = parsed.searchParams.toString();
   return `${parsed.protocol}//${parsed.hostname}${port}${pathname}${query ? `?${query}` : ""}`;
+}
+
+function relatedHostname(hostname) {
+  return hostname.toLowerCase().replace(/^(www|m)\./, "");
+}
+
+function relatedSiteHostname(hostname) {
+  const normalized = relatedHostname(hostname);
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length <= 2) {
+    return normalized;
+  }
+
+  return parts.slice(-2).join(".");
+}
+
+export function relatedAppGroup(url) {
+  if (!isCleanableUrl(url)) {
+    return null;
+  }
+
+  const parsed = new URL(url);
+  parsed.hostname = relatedHostname(parsed.hostname);
+  const rule = RELATED_APP_RULES.find((item) => item.match(parsed));
+
+  if (rule) {
+    return {
+      key: `related:${rule.label.toLowerCase().replace(/\s+/g, "-")}`,
+      label: rule.label
+    };
+  }
+
+  const label = relatedSiteHostname(parsed.hostname);
+  return {
+    key: `related:site:${label}`,
+    label
+  };
 }
 
 export function getDomain(url) {
@@ -295,7 +388,7 @@ function chooseDuplicateKeeper(items) {
   })[0];
 }
 
-function makeCandidate(reason, tab, record, normalizedUrl, details, now) {
+function makeCandidate(reason, tab, record, normalizedUrl, details, now, extra = {}) {
   const lastNavigationAt = Number(record.lastNavigationAt || record.lastReloadAt || record.firstSeenAt || 0);
   return {
     id: `${reason}:${tab.id}:${normalizedUrl}`,
@@ -307,10 +400,31 @@ function makeCandidate(reason, tab, record, normalizedUrl, details, now) {
     domain: getDomain(tab.url),
     normalizedUrl,
     incognito: Boolean(tab.incognito),
+    active: Boolean(tab.active),
+    pinned: Boolean(tab.pinned),
+    audible: Boolean(tab.audible),
     ageMs: Math.max(0, now - Number(record.firstSeenAt || record.createdAt || now)),
     lastNavigationAt,
-    details
+    details,
+    ...extra
   };
+}
+
+function getTabSortLabel(tab) {
+  return String(tab.title || tab.url || "").toLowerCase();
+}
+
+function makeReviewTab(tab, record, normalizedUrl, now) {
+  const group = relatedAppGroup(tab.url);
+  return makeCandidate(
+    "all",
+    tab,
+    record,
+    normalizedUrl,
+    "Open tab",
+    now,
+    { groupLabel: group?.label || getDomain(tab.url) }
+  );
 }
 
 export function buildCleanupCandidates(input) {
@@ -366,6 +480,49 @@ export function buildCleanupCandidates(input) {
     }
   }
 
+  const relatedGroups = new Map();
+  for (const item of normalizedItems) {
+    const related = relatedAppGroup(item.tab.url);
+    if (!related) {
+      continue;
+    }
+
+    const group = relatedGroups.get(related.key) || { related, items: [] };
+    group.items.push(item);
+    relatedGroups.set(related.key, group);
+  }
+
+  for (const group of relatedGroups.values()) {
+    if (group.items.length < 2) {
+      continue;
+    }
+
+    const relatedSettings = { ...settings, protectPinnedAudibleActive: false };
+    const distinctUrls = new Set(group.items.map((item) => item.normalizedUrl));
+    if (distinctUrls.size < 2) {
+      continue;
+    }
+
+    for (const item of group.items) {
+      if (
+        candidatesByTab.has(item.tab.id) ||
+        isProtectedTab(item.tab, relatedSettings)
+      ) {
+        continue;
+      }
+
+      candidatesByTab.set(item.tab.id, makeCandidate(
+        "related",
+        item.tab,
+        item.record,
+        item.normalizedUrl,
+        `Multiple ${group.related.label} tabs are open (${group.items.length} total)`,
+        now,
+        { groupLabel: group.related.label }
+      ));
+    }
+  }
+
   if (trackingReady) {
     for (const item of normalizedItems) {
       if (candidatesByTab.has(item.tab.id) || isProtectedTab(item.tab, settings)) {
@@ -414,8 +571,15 @@ export function buildCleanupCandidates(input) {
   return {
     trackingReady,
     trackingAgeMs: settings.trackingStartedAt ? Math.max(0, now - settings.trackingStartedAt) : 0,
+    allTabs: normalizedItems
+      .map((item) => makeReviewTab(item.tab, item.record, item.normalizedUrl, now))
+      .sort((a, b) => (
+        String(a.groupLabel || a.domain).localeCompare(String(b.groupLabel || b.domain)) ||
+        getTabSortLabel(a).localeCompare(getTabSortLabel(b))
+      )),
     candidates: [...candidatesByTab.values()].sort((a, b) => (
       a.reason.localeCompare(b.reason) ||
+      String(a.groupLabel || a.domain).localeCompare(String(b.groupLabel || b.domain)) ||
       a.domain.localeCompare(b.domain) ||
       a.title.localeCompare(b.title)
     ))

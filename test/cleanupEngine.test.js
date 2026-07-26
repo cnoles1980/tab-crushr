@@ -5,7 +5,8 @@ import {
   buildAchievementDefinitions,
   buildCleanupCandidates,
   evaluateAchievements,
-  normalizeUrl
+  normalizeUrl,
+  relatedAppGroup
 } from "../src/cleanupEngine.js";
 
 const now = Date.UTC(2026, 5, 24, 12, 0, 0);
@@ -51,6 +52,179 @@ test("normalizes tracking params, fragments, and query order", () => {
 test("detects duplicate tabs immediately and keeps the most recently accessed tab", () => {
   const older = tab(1, "https://example.com/docs?a=1&utm_medium=email", { lastAccessed: now - 10_000 });
   const newer = tab(2, "https://example.com/docs?a=1", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [older, newer],
+    records: {
+      [key(older)]: record(older),
+      [key(newer)]: record(newer)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].reason, "duplicate");
+  assert.equal(result.candidates[0].tabId, older.id);
+});
+
+test("recognizes related Google Calendar tabs across different dates and views", () => {
+  const week = tab(21, "https://calendar.google.com/calendar/u/0/r/week/2026/6/24");
+  const month = tab(22, "https://calendar.google.com/calendar/u/0/r/month/2026/7/1", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [week, month],
+    records: {
+      [key(week)]: record(week),
+      [key(month)]: record(month)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(week.url)?.label, "Google Calendar");
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [week.id, month.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+});
+
+test("recognizes related YouTube tabs even when the video URLs are different", () => {
+  const firstVideo = tab(23, "https://www.youtube.com/watch?v=aaa");
+  const secondVideo = tab(24, "https://youtu.be/bbb", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [firstVideo, secondVideo],
+    records: {
+      [key(firstVideo)]: record(firstVideo),
+      [key(secondVideo)]: record(secondVideo)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [firstVideo.id, secondVideo.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "YouTube"));
+});
+
+test("recognizes related tabs for any same site", () => {
+  const character = tab(27, "https://www.dndbeyond.com/characters/123456");
+  const campaign = tab(28, "https://www.dndbeyond.com/campaigns/98765");
+  const sourcebook = tab(29, "https://dndbeyond.com/sources/basic-rules", { lastAccessed: now });
+  const result = buildCleanupCandidates({
+    tabs: [character, campaign, sourcebook],
+    records: {
+      [key(character)]: record(character),
+      [key(campaign)]: record(campaign),
+      [key(sourcebook)]: record(sourcebook)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(character.url)?.label, "dndbeyond.com");
+  assert.equal(result.candidates.length, 3);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [character.id, campaign.id, sourcebook.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "dndbeyond.com"));
+});
+
+test("groups generic subdomains under the same related site", () => {
+  const app = tab(35, "https://app.example.com/work");
+  const help = tab(36, "https://help.example.com/article");
+  const result = buildCleanupCandidates({
+    tabs: [app, help],
+    records: {
+      [key(app)]: record(app),
+      [key(help)]: record(help)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.equal(relatedAppGroup(app.url)?.label, "example.com");
+  assert.equal(result.candidates.length, 2);
+  assert.ok(result.candidates.every((candidate) => candidate.groupLabel === "example.com"));
+});
+
+test("returns compact all-tab review rows for every cleanable tab", () => {
+  const first = tab(37, "https://example.com/a");
+  const second = tab(38, "chrome://extensions");
+  const third = tab(39, "https://news.example.com/story");
+  const result = buildCleanupCandidates({
+    tabs: [first, second, third],
+    records: {
+      [key(first)]: record(first),
+      [key(third)]: record(third)
+    },
+    settings: { trackingStartedAt: now },
+    now
+  });
+
+  assert.deepEqual(
+    result.allTabs.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [first.id, third.id]
+  );
+  assert.ok(result.allTabs.every((candidate) => candidate.reason === "all"));
+});
+
+test("includes active tabs in related same-site review groups", () => {
+  const character = tab(30, "https://www.dndbeyond.com/characters/123456", { active: true });
+  const campaign = tab(31, "https://www.dndbeyond.com/campaigns/98765");
+  const sourcebook = tab(32, "https://dndbeyond.com/sources/basic-rules");
+  const result = buildCleanupCandidates({
+    tabs: [character, campaign, sourcebook],
+    records: {
+      [key(character)]: record(character),
+      [key(campaign)]: record(campaign),
+      [key(sourcebook)]: record(sourcebook)
+    },
+    settings: {
+      trackingStartedAt: now,
+      protectPinnedAudibleActive: true
+    },
+    now
+  });
+
+  assert.equal(result.candidates.length, 3);
+  assert.deepEqual(
+    result.candidates.map((candidate) => candidate.tabId).sort((a, b) => a - b),
+    [character.id, campaign.id, sourcebook.id]
+  );
+  assert.ok(result.candidates.every((candidate) => candidate.reason === "related"));
+  assert.equal(result.candidates.find((candidate) => candidate.tabId === character.id)?.active, true);
+});
+
+test("keeps allowlisted domains out of related same-site groups", () => {
+  const first = tab(33, "https://docs.example.com/a");
+  const second = tab(34, "https://docs.example.com/b");
+  const result = buildCleanupCandidates({
+    tabs: [first, second],
+    records: {
+      [key(first)]: record(first),
+      [key(second)]: record(second)
+    },
+    settings: {
+      trackingStartedAt: now,
+      allowlistDomains: ["example.com"],
+      protectPinnedAudibleActive: true
+    },
+    now
+  });
+
+  assert.equal(result.candidates.length, 0);
+});
+
+test("keeps exact duplicate matches ahead of broader related matches", () => {
+  const older = tab(25, "https://www.youtube.com/watch?v=aaa&utm_source=email");
+  const newer = tab(26, "https://www.youtube.com/watch?v=aaa", { lastAccessed: now });
   const result = buildCleanupCandidates({
     tabs: [older, newer],
     records: {

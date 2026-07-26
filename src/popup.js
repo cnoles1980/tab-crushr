@@ -1,8 +1,10 @@
 const state = {
   candidates: [],
+  allTabs: [],
   hiddenCandidateIds: new Set(),
   selectedCandidateIds: new Set(),
-  lastScanState: null
+  lastScanState: null,
+  activeView: "duplicates"
 };
 
 const elements = {
@@ -22,6 +24,7 @@ const elements = {
   achievementList: document.querySelector("#achievementList"),
   earnedAchievementList: document.querySelector("#earnedAchievementList"),
   candidateList: document.querySelector("#candidateList"),
+  viewButtons: [...document.querySelectorAll(".viewTab")],
   keepButton: document.querySelector("#keepButton"),
   saveButton: document.querySelector("#saveButton"),
   crushButton: document.querySelector("#crushButton"),
@@ -59,14 +62,34 @@ function formatDate(ms) {
 
 function reasonLabel(reason) {
   return {
+    all: "All tabs",
     duplicate: "Duplicates",
+    related: "Related tabs",
     stale: "Stale tabs",
     superseded: "Superseded tabs"
   }[reason] || reason;
 }
 
+function isDuplicateViewCandidate(candidate) {
+  return candidate.reason === "duplicate" || candidate.reason === "related";
+}
+
+function isOldViewCandidate(candidate) {
+  return candidate.reason === "stale" || candidate.reason === "superseded";
+}
+
+function viewRows(view = state.activeView) {
+  const rows = view === "all"
+    ? state.allTabs
+    : state.candidates.filter((candidate) => (
+      view === "old" ? isOldViewCandidate(candidate) : isDuplicateViewCandidate(candidate)
+    ));
+
+  return rows.filter((candidate) => !state.hiddenCandidateIds.has(candidate.id));
+}
+
 function selectedVisibleCandidates() {
-  return state.candidates.filter((candidate) => (
+  return viewRows().filter((candidate) => (
     state.selectedCandidateIds.has(candidate.id) &&
     !state.hiddenCandidateIds.has(candidate.id)
   ));
@@ -101,6 +124,27 @@ function syncActionButtons() {
   elements.ramSavings.textContent = formatRam(estimateSelectedRamMb());
 }
 
+function syncViewTabs() {
+  const counts = {
+    duplicates: viewRows("duplicates").length,
+    old: viewRows("old").length,
+    all: viewRows("all").length
+  };
+  const labels = {
+    duplicates: "Duplicate Tabs",
+    old: "Old Tabs",
+    all: "All Tabs"
+  };
+
+  for (const button of elements.viewButtons) {
+    const view = button.dataset.view;
+    const isActive = view === state.activeView;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+    button.textContent = `${labels[view]} (${counts[view]})`;
+  }
+}
+
 function renderNotice(scanState) {
   const notices = [];
   const remainingMs = Math.max(0, 72 * 60 * 60 * 1000 - scanState.trackingAgeMs);
@@ -117,28 +161,127 @@ function renderNotice(scanState) {
   elements.notice.textContent = notices.join(" ");
 }
 
+function groupBy(items, keyFn) {
+  if (Map.groupBy) {
+    return Map.groupBy(items, keyFn);
+  }
+
+  return items.reduce((map, item) => {
+    const key = keyFn(item);
+    const group = map.get(key) || [];
+    group.push(item);
+    map.set(key, group);
+    return map;
+  }, new Map());
+}
+
+function renderCandidateRow(candidate) {
+  const row = document.createElement("article");
+  row.className = "candidate";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = state.selectedCandidateIds.has(candidate.id);
+  checkbox.setAttribute("aria-label", `Select ${candidate.title}`);
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) {
+      state.selectedCandidateIds.add(candidate.id);
+    } else {
+      state.selectedCandidateIds.delete(candidate.id);
+    }
+    syncActionButtons();
+  });
+
+  const main = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.className = "candidateTitle";
+  heading.title = candidate.title;
+  heading.textContent = candidate.title;
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const stateNotes = [
+    candidate.active ? "ACTIVE" : "",
+    candidate.pinned ? "pinned" : "",
+    candidate.audible ? "audible" : "",
+    candidate.incognito ? "incognito" : ""
+  ].filter(Boolean);
+  meta.textContent = [
+    ...stateNotes,
+    candidate.domain,
+    `age ${formatDuration(candidate.ageMs)}`,
+    `last nav ${formatDate(candidate.lastNavigationAt)}`
+  ].join(" | ");
+
+  const url = document.createElement("div");
+  url.className = "url";
+  url.textContent = candidate.url;
+  const urlDetails = document.createElement("details");
+  urlDetails.className = "urlDetails";
+  const urlSummary = document.createElement("summary");
+  urlSummary.textContent = "Show URL";
+  urlDetails.append(urlSummary, url);
+
+  main.append(heading, meta, urlDetails);
+
+  const keepDomain = document.createElement("button");
+  keepDomain.className = "domainButton";
+  keepDomain.type = "button";
+  keepDomain.textContent = "Always keep domain";
+  keepDomain.addEventListener("click", async () => {
+    await sendMessage({ type: "ADD_ALLOWLIST_DOMAIN", domain: candidate.domain });
+    await refresh();
+  });
+
+  row.append(checkbox, main, keepDomain);
+  return row;
+}
+
+function renderCandidateGroup(parent, reason, candidates) {
+  if (reason !== "related" && reason !== "all") {
+    for (const candidate of candidates) {
+      parent.append(renderCandidateRow(candidate));
+    }
+    return;
+  }
+
+  const siteGroups = groupBy(candidates, (candidate) => candidate.groupLabel || candidate.domain);
+  for (const [site, siteCandidates] of siteGroups.entries()) {
+    const siteGroup = document.createElement("details");
+    siteGroup.className = "siteGroup";
+    siteGroup.open = true;
+
+    const siteTitle = document.createElement("summary");
+    siteTitle.className = "siteTitle";
+    siteTitle.textContent = `${site} (${siteCandidates.length})`;
+    siteGroup.append(siteTitle);
+
+    for (const candidate of siteCandidates) {
+      siteGroup.append(renderCandidateRow(candidate));
+    }
+
+    parent.append(siteGroup);
+  }
+}
+
 function renderCandidates() {
-  const visible = state.candidates.filter((candidate) => !state.hiddenCandidateIds.has(candidate.id));
+  const visible = viewRows();
   elements.candidateCount.textContent = String(visible.length);
   elements.candidateList.textContent = "";
+  syncViewTabs();
 
   if (!visible.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = "No cleanup candidates right now.";
+    empty.textContent = state.activeView === "all"
+      ? "No open web tabs found."
+      : "No cleanup candidates right now.";
     elements.candidateList.append(empty);
     syncActionButtons();
     return;
   }
 
-  const groups = Map.groupBy
-    ? Map.groupBy(visible, (candidate) => candidate.reason)
-    : visible.reduce((map, candidate) => {
-      const group = map.get(candidate.reason) || [];
-      group.push(candidate);
-      map.set(candidate.reason, group);
-      return map;
-    }, new Map());
+  const groups = groupBy(visible, (candidate) => candidate.reason);
 
   for (const [reason, candidates] of groups.entries()) {
     const group = document.createElement("section");
@@ -149,52 +292,7 @@ function renderCandidates() {
     title.textContent = `${reasonLabel(reason)} (${candidates.length})`;
     group.append(title);
 
-    for (const candidate of candidates) {
-      const row = document.createElement("article");
-      row.className = "candidate";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = state.selectedCandidateIds.has(candidate.id);
-      checkbox.setAttribute("aria-label", `Select ${candidate.title}`);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) {
-          state.selectedCandidateIds.add(candidate.id);
-        } else {
-          state.selectedCandidateIds.delete(candidate.id);
-        }
-        syncActionButtons();
-      });
-
-      const main = document.createElement("div");
-      const heading = document.createElement("h3");
-      heading.className = "candidateTitle";
-      heading.title = candidate.title;
-      heading.textContent = candidate.title;
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = `${candidate.domain} | age ${formatDuration(candidate.ageMs)} | last nav ${formatDate(candidate.lastNavigationAt)}${candidate.incognito ? " | incognito" : ""}`;
-
-      const url = document.createElement("div");
-      url.className = "url";
-      url.textContent = candidate.url;
-
-      main.append(heading, meta, url);
-
-      const keepDomain = document.createElement("button");
-      keepDomain.className = "domainButton";
-      keepDomain.type = "button";
-      keepDomain.textContent = "Always keep domain";
-      keepDomain.addEventListener("click", async () => {
-        await sendMessage({ type: "ADD_ALLOWLIST_DOMAIN", domain: candidate.domain });
-        await refresh();
-      });
-
-      row.append(checkbox, main, keepDomain);
-      group.append(row);
-    }
-
+    renderCandidateGroup(group, reason, candidates);
     elements.candidateList.append(group);
   }
 
@@ -383,7 +481,12 @@ function applyState(scanState) {
 
   state.lastScanState = scanState;
   state.candidates = scanState.candidates || [];
-  state.selectedCandidateIds = new Set(state.candidates.map((candidate) => candidate.id));
+  state.allTabs = scanState.allTabs || [];
+  state.selectedCandidateIds = new Set(
+    state.candidates
+      .filter((candidate) => candidate.reason !== "related")
+      .map((candidate) => candidate.id)
+  );
   elements.includeIncognito.checked = Boolean(scanState.settings.includeIncognito);
   elements.includeIncognito.disabled = !scanState.incognitoAllowed;
   elements.discardInsteadOfClose.checked = Boolean(scanState.settings.discardInsteadOfClose);
@@ -443,6 +546,12 @@ async function saveForLater() {
 }
 
 elements.refreshButton.addEventListener("click", refresh);
+for (const button of elements.viewButtons) {
+  button.addEventListener("click", () => {
+    state.activeView = button.dataset.view || "duplicates";
+    renderCandidates();
+  });
+}
 elements.includeIncognito.addEventListener("change", () => updateSetting("includeIncognito", elements.includeIncognito.checked));
 elements.discardInsteadOfClose.addEventListener("change", () => updateSetting("discardInsteadOfClose", elements.discardInsteadOfClose.checked));
 elements.protectPinnedAudibleActive.addEventListener("change", () => updateSetting("protectPinnedAudibleActive", elements.protectPinnedAudibleActive.checked));
