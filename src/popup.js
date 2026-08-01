@@ -19,8 +19,15 @@ const elements = {
   selectedPercent: document.querySelector("#selectedPercent"),
   ramSavings: document.querySelector("#ramSavings"),
   impactText: document.querySelector("#impactText"),
+  impactTitle: document.querySelector("#impactTitle"),
+  impactDetails: document.querySelector("#impactDetails"),
+  impactAchievement: document.querySelector("#impactAchievement"),
   lifetimeTabs: document.querySelector("#lifetimeTabs"),
   lifetimeRam: document.querySelector("#lifetimeRam"),
+  nextMilestoneName: document.querySelector("#nextMilestoneName"),
+  nextMilestonePercent: document.querySelector("#nextMilestonePercent"),
+  nextMilestoneBar: document.querySelector("#nextMilestoneBar"),
+  nextMilestoneRemaining: document.querySelector("#nextMilestoneRemaining"),
   achievementList: document.querySelector("#achievementList"),
   earnedAchievementList: document.querySelector("#earnedAchievementList"),
   candidateList: document.querySelector("#candidateList"),
@@ -110,6 +117,16 @@ function formatRam(mb) {
 
 function formatNumber(value) {
   return new Intl.NumberFormat().format(Number(value || 0));
+}
+
+function lockedMilestones(achievements = []) {
+  return achievements
+    .filter((achievement) => !achievement.unlocked)
+    .sort((a, b) => (
+      b.progress - a.progress ||
+      a.remaining - b.remaining ||
+      a.threshold - b.threshold
+    ));
 }
 
 function syncActionButtons() {
@@ -301,33 +318,65 @@ function renderCandidates() {
 
 function renderImpact(scanState) {
   const unlocks = scanState.newlyUnlockedAchievements || [];
-  const unlockText = unlocks.length
-    ? ` Achievement unlocked: ${unlocks.map((achievement) => achievement.name).join(", ")}.`
-    : "";
+  const nextMilestone = lockedMilestones(scanState.achievements)[0];
+  const progressText = unlocks.length
+    ? `Achievement unlocked: ${unlocks.map((achievement) => achievement.name).join(", ")}`
+    : nextMilestone
+      ? `Next: ${nextMilestone.name} · ${formatNumber(nextMilestone.remaining)} to go`
+      : "";
   const stats = scanState.lastActionStats;
   if (stats) {
     const verb = stats.action === "discard" ? "Discarded" : "Crushed";
     elements.impactText.hidden = false;
-    elements.impactText.textContent = `${verb} ${stats.count} tab${stats.count === 1 ? "" : "s"} (${stats.percent}% of scanned tabs), freeing about ${formatRam(stats.estimatedRamMb)}.${unlockText}`;
+    elements.impactTitle.textContent = `${verb} ${formatNumber(stats.count)} tab${stats.count === 1 ? "" : "s"}`;
+    elements.impactDetails.textContent = `${stats.percent}% of scanned tabs · about ${formatRam(stats.estimatedRamMb)} reclaimed`;
+    elements.impactAchievement.hidden = !progressText;
+    elements.impactAchievement.textContent = progressText;
     return;
   }
 
   if (typeof scanState.savedCount === "number") {
     elements.impactText.hidden = false;
-    elements.impactText.textContent = scanState.savedCount
-      ? `Saved ${scanState.savedCount} new tab${scanState.savedCount === 1 ? "" : "s"} for later.${unlockText}`
-      : "Those tabs were already saved for later.";
+    elements.impactTitle.textContent = scanState.savedCount
+      ? `Saved ${formatNumber(scanState.savedCount)} tab${scanState.savedCount === 1 ? "" : "s"} for later`
+      : "Already saved for later";
+    elements.impactDetails.textContent = scanState.savedCount
+      ? "Kept safely without adding browser bookmarks"
+      : "No duplicate saved items were added";
+    elements.impactAchievement.hidden = !progressText;
+    elements.impactAchievement.textContent = progressText;
     return;
   }
 
   elements.impactText.hidden = true;
-  elements.impactText.textContent = "";
+  elements.impactTitle.textContent = "";
+  elements.impactDetails.textContent = "";
+  elements.impactAchievement.hidden = true;
+  elements.impactAchievement.textContent = "";
 }
 
-function renderLifetime(scanState) {
+function renderProgress(scanState) {
   const stats = scanState.lifetimeStats || {};
   elements.lifetimeTabs.textContent = formatNumber(stats.tabsCrushed);
   elements.lifetimeRam.textContent = formatRam(stats.memorySavedMb || 0);
+
+  const nextMilestone = lockedMilestones(scanState.achievements)[0];
+  if (!nextMilestone) {
+    elements.nextMilestoneName.textContent = "All visible milestones unlocked";
+    elements.nextMilestonePercent.textContent = "100%";
+    elements.nextMilestoneBar.style.width = "100%";
+    elements.nextMilestoneRemaining.textContent = "New milestones appear as your totals grow";
+    return;
+  }
+
+  const percent = Math.round((nextMilestone.progress || 0) * 100);
+  const metricLabel = nextMilestone.metric === "memorySavedMb"
+    ? formatRam(nextMilestone.remaining)
+    : formatNumber(nextMilestone.remaining);
+  elements.nextMilestoneName.textContent = nextMilestone.name;
+  elements.nextMilestonePercent.textContent = `${percent}%`;
+  elements.nextMilestoneBar.style.width = `${percent}%`;
+  elements.nextMilestoneRemaining.textContent = `${metricLabel} to go · ${nextMilestone.description}`;
 }
 
 function renderAchievements(achievements = []) {
@@ -342,14 +391,7 @@ function renderAchievements(achievements = []) {
     return;
   }
 
-  const nextMilestones = achievements
-    .filter((achievement) => !achievement.unlocked)
-    .sort((a, b) => (
-      b.progress - a.progress ||
-      a.remaining - b.remaining ||
-      a.threshold - b.threshold
-    ))
-    .slice(0, 2);
+  const nextMilestones = lockedMilestones(achievements).slice(0, 2);
   const earnedAchievements = achievements
     .filter((achievement) => achievement.unlocked)
     .sort((a, b) => (
@@ -498,7 +540,7 @@ function applyState(scanState) {
     : "Tracking has started. Stale cleanup is warming up.";
   renderNotice(scanState);
   renderImpact(scanState);
-  renderLifetime(scanState);
+  renderProgress(scanState);
   renderAchievements(scanState.achievements);
   renderCandidates();
   renderSavedLater(scanState.savedLater);
