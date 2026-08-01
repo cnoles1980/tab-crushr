@@ -19,6 +19,36 @@
         <button id="refreshButton" class="iconButton refreshIcon" title="Refresh scan" aria-label="Refresh scan">&#8635;</button>
       </header>
 
+      <section class="crushProgress" aria-label="Crush progress">
+        <span class="progressLabel">Crush progress</span>
+        <div class="progressStats">
+          <div>
+            <strong id="lifetimeTabs">0</strong>
+            <span>tabs crushed</span>
+          </div>
+          <div>
+            <strong id="lifetimeRam">0 MB</strong>
+            <span>estimated RAM reclaimed</span>
+          </div>
+        </div>
+        <div id="nextMilestone" class="nextMilestone">
+          <div class="milestoneHeading">
+            <strong id="nextMilestoneName">First Crush</strong>
+            <span id="nextMilestonePercent">0%</span>
+          </div>
+          <div class="progressTrack" aria-hidden="true">
+            <span id="nextMilestoneBar"></span>
+          </div>
+          <span id="nextMilestoneRemaining" class="milestoneRemaining">1 tab to go</span>
+        </div>
+      </section>
+
+      <section id="impactText" class="impact" hidden aria-live="polite">
+        <strong id="impactTitle"></strong>
+        <span id="impactDetails"></span>
+        <span id="impactAchievement" class="impactAchievement" hidden></span>
+      </section>
+
       <section class="settings" aria-label="Settings">
         <label class="toggle">
           <input id="includeIncognito" type="checkbox">
@@ -55,21 +85,8 @@
         </div>
       </section>
 
-      <section id="impactText" class="impact" hidden></section>
-
-      <section class="lifetime" aria-label="Lifetime crush stats">
-        <div>
-          <span>Lifetime tabs crushed</span>
-          <strong id="lifetimeTabs">0</strong>
-        </div>
-        <div>
-          <span>Lifetime RAM saved</span>
-          <strong id="lifetimeRam">0 MB</strong>
-        </div>
-      </section>
-
-      <details class="achievements" open>
-        <summary>Next milestones</summary>
+      <details class="achievements">
+        <summary>All milestones</summary>
         <div id="achievementList" class="achievementList"></div>
       </details>
 

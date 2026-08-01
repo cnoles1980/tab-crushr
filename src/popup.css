@@ -72,6 +72,102 @@ h1 {
   font-size: 12px;
 }
 
+.crushProgress {
+  border-radius: 12px;
+  background: #000;
+  padding: 12px;
+  color: #e9e3df;
+}
+
+.progressLabel {
+  display: block;
+  color: #e9e3df;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.progressStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.progressStats div + div {
+  border-left: 1px solid rgba(233, 227, 223, 0.3);
+  padding-left: 12px;
+}
+
+.progressStats strong,
+.progressStats span {
+  display: block;
+}
+
+.progressStats strong {
+  color: #ff7a30;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.progressStats span {
+  margin-top: 4px;
+  color: #e9e3df;
+  font-size: 11px;
+}
+
+.nextMilestone {
+  margin-top: 12px;
+  border-top: 1px solid rgba(233, 227, 223, 0.3);
+  padding-top: 10px;
+}
+
+.milestoneHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.milestoneHeading strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.milestoneHeading span {
+  color: #ff7a30;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.progressTrack {
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(233, 227, 223, 0.22);
+}
+
+.progressTrack span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #ff7a30;
+  transition: width 180ms ease-out;
+}
+
+.milestoneRemaining {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: #e9e3df;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .iconButton {
   width: 34px;
   height: 34px;
@@ -141,38 +237,32 @@ h1 {
 }
 
 .impact {
+  display: grid;
+  gap: 3px;
   border-radius: 8px;
   background: #465c88;
-  padding: 10px 12px;
+  padding: 12px;
   color: #e9e3df;
-  font-size: 12px;
-  font-weight: 700;
 }
 
-.lifetime {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.impact strong {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.15;
 }
 
-.lifetime div {
-  border-radius: 8px;
-  background: #000;
-  padding: 10px;
-}
-
-.lifetime span {
-  display: block;
-  color: #e9e3df;
+.impact > span {
   font-size: 12px;
 }
 
-.lifetime strong {
-  display: block;
-  margin-top: 3px;
-  color: #ff7a30;
-  font-size: 24px;
-  line-height: 1;
+.impactAchievement {
+  width: fit-content;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #ff7a30;
+  padding: 4px 8px;
+  color: #000;
+  font-weight: 800;
 }
 
 .achievements,
